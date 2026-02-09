@@ -76,3 +76,4 @@ select
   end as avg_outflow_per_transaction
 from customer_stats cs
 left join txn_combined tc on cs.customer_id = tc.customer_id
+order by customer_lifetime_inflows desc
