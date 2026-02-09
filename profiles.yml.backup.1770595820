@@ -1,0 +1,12 @@
+dagent1:
+  outputs:
+    dev:
+      dataset: sample_k_r_at_top_uo_lu_20260208231623
+      keyfile: keyfile.json
+      method: service-account
+      priority: interactive
+      project: prd-dagen
+      threads: 4
+      timeout_seconds: 300
+      type: bigquery
+  target: dev

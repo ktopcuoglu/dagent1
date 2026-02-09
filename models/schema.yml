@@ -1,0 +1,601 @@
+version: 2
+
+models:
+  # ============================================================================
+  # STAGING MODELS - Raw data normalization and deduplication
+  # ============================================================================
+  
+  - name: stg_customers
+    description: "Staging model for customer master data from Airbyte CDC"
+    columns:
+      - name: customer_id
+        description: "Unique customer identifier (UUID)"
+        tests:
+          - unique
+          - not_null
+      - name: customer_type
+        description: "Customer type classification (business, individual, etc.)"
+      - name: email
+        description: "Customer email address"
+      - name: kyc_status
+        description: "KYC verification status (verified, pending, under_review)"
+      - name: risk_profile
+        description: "Risk profile classification (low, medium, high)"
+      - name: address_json
+        description: "Customer address stored as JSON"
+      - name: created_at
+        description: "Timestamp when customer record was created"
+      - name: updated_at
+        description: "Timestamp when customer record was last updated"
+
+  - name: stg_transactions
+    description: "Staging model for transaction records from Airbyte CDC"
+    columns:
+      - name: transaction_id
+        description: "Unique transaction identifier (UUID)"
+        tests:
+          - unique
+          - not_null
+      - name: debtor_customer_id
+        description: "Customer ID of money sender"
+      - name: creditor_customer_id
+        description: "Customer ID of money receiver"
+      - name: payment_method_id
+        description: "Payment method used for transaction"
+      - name: amount
+        description: "Transaction amount in specified currency"
+      - name: currency
+        description: "Currency code (USD, EUR, etc.)"
+      - name: status
+        description: "Transaction status (completed, pending, failed)"
+      - name: created_at
+        description: "Transaction creation timestamp"
+      - name: updated_at
+        description: "Transaction last update timestamp"
+
+  - name: stg_payment_methods
+    description: "Staging model for payment method records"
+    columns:
+      - name: payment_method_id
+        description: "Unique payment method identifier (UUID)"
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: "Customer who owns this payment method"
+      - name: method_type
+        description: "Payment method type (credit_card, bank_account, digital_wallet)"
+      - name: is_default
+        description: "Whether this is the default payment method"
+      - name: details_json
+        description: "Payment method details stored as JSON"
+      - name: created_at
+        description: "Payment method creation timestamp"
+
+  - name: stg_refunds
+    description: "Staging model for refund records"
+    columns:
+      - name: refund_id
+        description: "Unique refund identifier (UUID)"
+        tests:
+          - unique
+          - not_null
+      - name: transaction_id
+        description: "Original transaction being refunded"
+      - name: amount
+        description: "Refund amount"
+      - name: reason
+        description: "Refund reason"
+      - name: status
+        description: "Refund status"
+      - name: created_at
+        description: "Refund creation timestamp"
+      - name: updated_at
+        description: "Refund last update timestamp"
+
+  - name: stg_disputes
+    description: "Staging model for dispute/chargeback records"
+    columns:
+      - name: dispute_id
+        description: "Unique dispute identifier (UUID)"
+        tests:
+          - unique
+          - not_null
+      - name: transaction_id
+        description: "Transaction under dispute"
+      - name: amount
+        description: "Disputed amount"
+      - name: reason
+        description: "Reason for dispute"
+      - name: status
+        description: "Dispute status"
+      - name: created_at
+        description: "Dispute creation timestamp"
+      - name: updated_at
+        description: "Dispute last update timestamp"
+
+  - name: stg_fees
+    description: "Staging model for fee records"
+    columns:
+      - name: fee_id
+        description: "Unique fee identifier (UUID)"
+        tests:
+          - unique
+          - not_null
+      - name: transaction_id
+        description: "Transaction this fee is associated with"
+      - name: fee_type
+        description: "Fee type (platform_fee, processing_fee, interchange_fee)"
+      - name: amount
+        description: "Fee amount"
+      - name: created_at
+        description: "Fee creation timestamp"
+
+  - name: stg_transaction_legs
+    description: "Staging model for transaction leg records (sub-transactions)"
+    columns:
+      - name: transaction_leg_id
+        description: "Unique transaction leg identifier"
+        tests:
+          - unique
+          - not_null
+      - name: transaction_id
+        description: "Parent transaction ID"
+      - name: leg_type
+        description: "Type of transaction leg"
+      - name: amount
+        description: "Amount for this leg"
+      - name: created_at
+        description: "Leg creation timestamp"
+
+  - name: stg_mandates
+    description: "Staging model for mandate records (recurring payment agreements)"
+    columns:
+      - name: mandate_id
+        description: "Unique mandate identifier"
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: "Customer this mandate is for"
+      - name: payment_method_id
+        description: "Payment method for this mandate"
+      - name: status
+        description: "Mandate status"
+      - name: created_at
+        description: "Mandate creation timestamp"
+      - name: updated_at
+        description: "Mandate last update timestamp"
+
+  - name: stg_payouts
+    description: "Staging model for payout records"
+    columns:
+      - name: payout_id
+        description: "Unique payout identifier"
+        tests:
+          - unique
+          - not_null
+      - name: recipient_customer_id
+        description: "Customer receiving the payout"
+      - name: amount
+        description: "Payout amount"
+      - name: currency
+        description: "Payout currency"
+      - name: status
+        description: "Payout status"
+      - name: created_at
+        description: "Payout creation timestamp"
+      - name: updated_at
+        description: "Payout last update timestamp"
+
+  # ============================================================================
+  # DIMENSION TABLES - Master data for analytics
+  # ============================================================================
+
+  - name: dim_customers
+    description: "Customer dimension table with full refresh"
+    columns:
+      - name: customer_sk
+        description: "Customer surrogate key"
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: "Natural key - customer identifier"
+        tests:
+          - unique
+          - not_null
+      - name: customer_type
+        description: "Customer type (business, individual)"
+      - name: email
+        description: "Customer email"
+      - name: kyc_status
+        description: "KYC verification status"
+      - name: risk_profile
+        description: "Risk profile (low, medium, high)"
+      - name: created_date
+        description: "Customer creation date"
+      - name: updated_date
+        description: "Customer last update date"
+
+  - name: dim_payment_methods
+    description: "Payment method dimension table"
+    columns:
+      - name: payment_method_sk
+        description: "Payment method surrogate key"
+        tests:
+          - unique
+          - not_null
+      - name: payment_method_id
+        description: "Natural key - payment method identifier"
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: "Customer who owns this payment method"
+      - name: method_type
+        description: "Payment method type"
+      - name: is_default
+        description: "Default payment method flag"
+      - name: created_date
+        description: "Payment method creation date"
+
+  - name: dim_dates
+    description: "Calendar dimension table covering 2024-2030"
+    columns:
+      - name: date_id
+        description: "Date surrogate key"
+        tests:
+          - unique
+          - not_null
+      - name: full_date
+        description: "Full date (YYYY-MM-DD)"
+        tests:
+          - unique
+          - not_null
+      - name: year
+        description: "Calendar year"
+      - name: quarter
+        description: "Calendar quarter"
+      - name: month
+        description: "Calendar month"
+      - name: month_name
+        description: "Month name (January, February, etc.)"
+      - name: day_of_week
+        description: "Day of week (1=Sunday, 7=Saturday)"
+      - name: day_of_week_name
+        description: "Day of week name"
+      - name: is_weekend
+        description: "Weekend flag"
+      - name: is_holiday
+        description: "Holiday flag"
+
+  # ============================================================================
+  # FACT TABLES - Transactional data for analytics
+  # ============================================================================
+
+  - name: fct_transactions
+    description: "Fact table for all transactions (incremental)"
+    columns:
+      - name: transaction_sk
+        description: "Transaction surrogate key"
+        tests:
+          - unique
+          - not_null
+      - name: transaction_id
+        description: "Natural key - transaction identifier"
+        tests:
+          - unique
+          - not_null
+      - name: debtor_customer_id
+        description: "Customer sending money (FK to dim_customers)"
+      - name: creditor_customer_id
+        description: "Customer receiving money (FK to dim_customers)"
+      - name: payment_method_id
+        description: "Payment method used (FK to dim_payment_methods)"
+      - name: gross_amount
+        description: "Transaction amount before fees"
+      - name: net_amount
+        description: "Transaction amount after fees (gross_amount - total_fees)"
+      - name: total_fees
+        description: "Sum of all fees for this transaction"
+      - name: platform_fee
+        description: "Platform fee amount"
+      - name: processing_fee
+        description: "Processing fee amount"
+      - name: interchange_fee
+        description: "Interchange fee amount"
+      - name: fee_percentage
+        description: "Fees as percentage of gross amount"
+      - name: fee_classification
+        description: "Fee classification (low, medium, high, no_fees)"
+      - name: currency
+        description: "Transaction currency"
+      - name: status
+        description: "Transaction status"
+      - name: debtor_customer_type
+        description: "Debtor customer type"
+      - name: debtor_kyc_status
+        description: "Debtor KYC status"
+      - name: debtor_risk_profile
+        description: "Debtor risk profile"
+      - name: creditor_customer_type
+        description: "Creditor customer type"
+      - name: creditor_kyc_status
+        description: "Creditor KYC status"
+      - name: creditor_risk_profile
+        description: "Creditor risk profile"
+      - name: created_date
+        description: "Transaction creation date"
+      - name: updated_date
+        description: "Transaction last update date"
+
+  - name: fct_refunds
+    description: "Fact table for refunds (incremental)"
+    columns:
+      - name: refund_sk
+        description: "Refund surrogate key"
+      - name: refund_id
+        description: "Natural key - refund identifier"
+        tests:
+          - unique
+          - not_null
+      - name: transaction_id
+        description: "Original transaction being refunded"
+      - name: debtor_customer_id
+        description: "Customer who initiated the refund"
+      - name: creditor_customer_id
+        description: "Customer receiving the refund"
+      - name: original_transaction_amount
+        description: "Original transaction amount"
+      - name: refund_amount
+        description: "Refund amount"
+      - name: currency
+        description: "Refund currency"
+      - name: refund_reason
+        description: "Refund reason"
+      - name: refund_reason_category
+        description: "Refund reason category (customer_initiated, fraud, system_error, other)"
+      - name: refund_status
+        description: "Refund status"
+      - name: refund_severity
+        description: "Refund severity (critical, high, medium, low)"
+      - name: refund_percentage
+        description: "Refund as percentage of original transaction"
+      - name: net_revenue_after_refund
+        description: "Net revenue after refund"
+      - name: is_suspicious_refund
+        description: "Flag for suspicious refunds"
+      - name: days_to_refund
+        description: "Days between transaction and refund"
+      - name: refund_date
+        description: "Refund date"
+      - name: transaction_date
+        description: "Original transaction date"
+
+  - name: fct_disputes
+    description: "Fact table for disputes/chargebacks (incremental)"
+    columns:
+      - name: dispute_sk
+        description: "Dispute surrogate key"
+      - name: dispute_id
+        description: "Natural key - dispute identifier"
+        tests:
+          - unique
+          - not_null
+      - name: transaction_id
+        description: "Transaction under dispute"
+      - name: debtor_customer_id
+        description: "Debtor customer"
+      - name: creditor_customer_id
+        description: "Creditor customer"
+      - name: disputed_amount
+        description: "Amount in dispute"
+      - name: currency
+        description: "Dispute currency"
+      - name: dispute_reason
+        description: "Reason for dispute"
+      - name: dispute_status
+        description: "Dispute status"
+      - name: created_date
+        description: "Dispute creation date"
+      - name: updated_date
+        description: "Dispute last update date"
+      - name: dispute_resolution_days
+        description: "Days to resolve dispute"
+
+  # ============================================================================
+  # ANALYTICS VIEWS - KPI views for business insights
+  # ============================================================================
+
+  - name: vw_daily_revenue
+    description: "Daily revenue metrics by currency and customer type"
+    columns:
+      - name: created_date
+        description: "Transaction date"
+      - name: currency
+        description: "Transaction currency"
+      - name: debtor_customer_type
+        description: "Debtor customer type"
+      - name: transaction_count
+        description: "Number of completed transactions"
+      - name: unique_debtors
+        description: "Count of unique debtor customers"
+      - name: unique_creditors
+        description: "Count of unique creditor customers"
+      - name: total_amount
+        description: "Total transaction volume (gross)"
+      - name: net_amount
+        description: "Total transaction volume (net of fees)"
+      - name: total_fees_collected
+        description: "Total fees collected"
+      - name: avg_transaction_size
+        description: "Average transaction amount"
+      - name: min_transaction_amount
+        description: "Minimum transaction amount"
+      - name: max_transaction_amount
+        description: "Maximum transaction amount"
+
+  - name: vw_customer_metrics
+    description: "Customer-level metrics including lifetime value and activity"
+    columns:
+      - name: customer_id
+        description: "Customer identifier"
+      - name: customer_type
+        description: "Customer type"
+      - name: kyc_status
+        description: "KYC verification status"
+      - name: risk_profile
+        description: "Risk profile"
+      - name: created_date
+        description: "Customer creation date"
+      - name: is_active_30d
+        description: "Active in last 30 days flag"
+      - name: total_transactions
+        description: "Total number of transactions"
+      - name: customer_lifetime_inflows
+        description: "Total inflows (money received)"
+      - name: customer_lifetime_outflows
+        description: "Total outflows (money sent)"
+      - name: customer_net_position
+        description: "Net position (inflows - outflows)"
+      - name: avg_inflow_per_transaction
+        description: "Average inflow amount per transaction"
+      - name: avg_outflow_per_transaction
+        description: "Average outflow amount per transaction"
+
+  - name: vw_payment_method_performance
+    description: "Payment method performance metrics"
+    columns:
+      - name: method_type
+        description: "Payment method type"
+      - name: total_transactions
+        description: "Total transactions using this method"
+      - name: total_volume
+        description: "Total transaction volume"
+      - name: avg_transaction_amount
+        description: "Average transaction amount"
+      - name: success_rate_percent
+        description: "Success rate percentage"
+      - name: failure_rate_percent
+        description: "Failure rate percentage"
+      - name: successful_transactions
+        description: "Count of successful transactions"
+      - name: failed_transactions
+        description: "Count of failed transactions"
+
+  - name: vw_refund_chargeback_analysis
+    description: "Refund and chargeback analysis with trends"
+    columns:
+      - name: date
+        description: "Analysis date"
+      - name: refund_reason
+        description: "Refund reason category"
+      - name: dispute_reason
+        description: "Dispute reason"
+      - name: refund_count
+        description: "Number of refunds"
+      - name: dispute_count
+        description: "Number of disputes"
+      - name: total_transactions
+        description: "Total completed transactions"
+      - name: total_refund_amount
+        description: "Total refund amount"
+      - name: total_disputed_amount
+        description: "Total disputed amount"
+      - name: refund_rate_percent
+        description: "Refund rate as percentage of transactions"
+      - name: dispute_rate_percent
+        description: "Dispute rate as percentage of transactions"
+      - name: avg_refund_amount
+        description: "Average refund amount"
+      - name: avg_dispute_resolution_days
+        description: "Average dispute resolution time"
+      - name: suspicious_refund_count
+        description: "Count of suspicious refunds"
+
+  - name: vw_fee_revenue_analysis
+    description: "Fee revenue analysis by type and currency"
+    columns:
+      - name: created_date
+        description: "Analysis date"
+      - name: currency
+        description: "Currency"
+      - name: transaction_count
+        description: "Number of transactions"
+      - name: total_transaction_amount
+        description: "Total transaction volume"
+      - name: total_fees
+        description: "Total fees collected"
+      - name: platform_fees
+        description: "Platform fees"
+      - name: processing_fees
+        description: "Processing fees"
+      - name: interchange_fees
+        description: "Interchange fees"
+      - name: avg_fee_per_transaction
+        description: "Average fee per transaction"
+      - name: avg_fee_percentage
+        description: "Average fee as percentage"
+      - name: fee_margin_percent
+        description: "Fee margin as percentage of transaction volume"
+      - name: platform_fee_percent_of_total
+        description: "Platform fees as percentage of total fees"
+      - name: processing_fee_percent_of_total
+        description: "Processing fees as percentage of total fees"
+      - name: interchange_fee_percent_of_total
+        description: "Interchange fees as percentage of total fees"
+
+  - name: vw_risk_compliance_dashboard
+    description: "Risk and compliance monitoring dashboard"
+    columns:
+      - name: kyc_status
+        description: "KYC verification status"
+      - name: risk_profile
+        description: "Risk profile"
+      - name: customer_type
+        description: "Customer type"
+      - name: report_date
+        description: "Report date"
+      - name: total_customers
+        description: "Total customers in segment"
+      - name: total_transactions
+        description: "Total transactions"
+      - name: total_transaction_volume
+        description: "Total transaction volume"
+      - name: high_risk_transaction_count
+        description: "Count of high-risk transactions"
+      - name: pending_kyc_transaction_count
+        description: "Count of transactions with pending KYC"
+      - name: verified_kyc_transaction_count
+        description: "Count of transactions with verified KYC"
+      - name: high_risk_transaction_rate_percent
+        description: "High-risk transaction rate"
+      - name: kyc_verification_rate_percent
+        description: "KYC verification rate"
+
+  - name: vw_payout_metrics
+    description: "Payout operations and settlement tracking"
+    columns:
+      - name: payout_date
+        description: "Payout date"
+      - name: payout_status
+        description: "Payout status"
+      - name: recipient_type
+        description: "Recipient customer type"
+      - name: payout_count
+        description: "Number of payouts"
+      - name: total_payout_amount
+        description: "Total payout amount"
+      - name: avg_payout_amount
+        description: "Average payout amount"
+      - name: executed_payouts
+        description: "Count of executed payouts"
+      - name: pending_payouts
+        description: "Count of pending payouts"
+      - name: scheduled_payouts
+        description: "Count of scheduled payouts"
+      - name: payout_success_rate_percent
+        description: "Payout success rate"
+      - name: pending_payout_amount
+        description: "Total amount of pending payouts"

@@ -1,0 +1,71 @@
+version: 2
+
+sources:
+  - name: airbyte_raw
+    description: "Raw data from Airbyte CDC pipeline (PostgreSQL payments database)"
+    database: prd-dagen
+    schema: sample_k_r_at_top_uo_lu_20260208231623
+    freshness:
+      warn_after: { count: 24, period: hour }
+      error_after: { count: 48, period: hour }
+    loaded_at_field: _airbyte_loaded_at
+    tables:
+      - name: airbyte_raw_customers
+        description: "Raw customer master data from PostgreSQL"
+        columns:
+          - name: _airbyte_raw_id
+            description: "Airbyte unique record identifier"
+          - name: _airbyte_extracted_at
+            description: "Timestamp when record was extracted"
+          - name: _airbyte_loaded_at
+            description: "Timestamp when record was loaded"
+          - name: _airbyte_data
+            description: "JSON payload containing customer data"
+      
+      - name: airbyte_raw_transactions
+        description: "Raw transaction records from PostgreSQL"
+        columns:
+          - name: _airbyte_data
+            description: "JSON payload containing transaction data (id, debtor_customer_id, creditor_customer_id, payment_method_id, amount, currency, status, created_at, updated_at)"
+      
+      - name: airbyte_raw_payment_methods
+        description: "Raw payment method records"
+        columns:
+          - name: _airbyte_data
+            description: "JSON payload containing payment method data (id, customer_id, method_type, is_default, created_at)"
+      
+      - name: airbyte_raw_refunds
+        description: "Raw refund records"
+        columns:
+          - name: _airbyte_data
+            description: "JSON payload containing refund data (id, transaction_id, amount, reason, status, created_at)"
+      
+      - name: airbyte_raw_disputes
+        description: "Raw dispute/chargeback records"
+        columns:
+          - name: _airbyte_data
+            description: "JSON payload containing dispute data (id, transaction_id, amount, reason, status, created_at, updated_at)"
+      
+      - name: airbyte_raw_fees
+        description: "Raw fee records"
+        columns:
+          - name: _airbyte_data
+            description: "JSON payload containing fee data (id, transaction_id, fee_type, amount, created_at)"
+      
+      - name: airbyte_raw_transaction_legs
+        description: "Raw transaction leg records (sub-transactions)"
+        columns:
+          - name: _airbyte_data
+            description: "JSON payload containing transaction leg data"
+      
+      - name: airbyte_raw_mandates
+        description: "Raw mandate records (recurring payment agreements)"
+        columns:
+          - name: _airbyte_data
+            description: "JSON payload containing mandate data"
+      
+      - name: airbyte_raw_payouts
+        description: "Raw payout records"
+        columns:
+          - name: _airbyte_data
+            description: "JSON payload containing payout data (id, recipient_customer_id, amount, status, created_at, updated_at)"
