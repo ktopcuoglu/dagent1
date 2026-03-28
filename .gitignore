@@ -15,6 +15,7 @@ credentials.json
 # DBT build artifacts
 target/
 dbt_packages/
+*.backup.*
 dbt_modules/
 .dbt/
 logs/
@@ -36,6 +37,12 @@ derby.log
 
 # Logs and temporary files
 *.log
+
+
+
+
+
+
 
 
 
